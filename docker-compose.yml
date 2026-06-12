@@ -65,15 +65,38 @@ services:
     depends_on:
       - backend
 
+  # ngrok — exposes local backend to the internet (OwnTracks HTTP ingest).
+  # Start with: docker compose --profile phone up -d
+  #
+  # STATIC DOMAIN (--domain=...)
+  # Without --domain, ngrok assigns a random *.ngrok-free.app URL on every
+  # container restart. OwnTracks would need reconfiguring each time. A reserved
+  # static domain keeps the same public URL permanently.
+  #
+  # HTTP TUNNEL vs TCP TUNNEL
+  # - HTTP tunnel (this service): forwards HTTPS to an HTTP server. Used here for
+  #   OwnTracks HTTP mode → POST /api/v1/ingest/owntracks.
+  # - TCP tunnel (not configured here): raw TCP port forwarding, e.g. for AIS-140
+  #   VLT hardware that speaks NMR/binary protocol over TCP, not HTTP.
+  #
+  # AIS-140 TCP IN PRODUCTION
+  # Maharashtra AIS-140 devices expect a stable TCP endpoint (fixed IP:port).
+  # ngrok TCP tunnels are fine for dev/testing, but production should move to a
+  # VPS with a static public IP so devices never need URL/IP changes.
   ngrok:
     image: ngrok/ngrok:latest
     profiles: ["phone"]
     restart: unless-stopped
-    command: http backend:3000
+    command:
+      - http
+      - --domain=intense-elf-lively.ngrok-free.app
+      - host.docker.internal:3000
     environment:
       NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
     ports:
       - "4040:4040"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       backend:
         condition: service_healthy

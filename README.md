@@ -66,32 +66,44 @@ npm run dev
 
 ## OwnTracks HTTP Setup (ngrok in Docker)
 
-1. Create a free account at [ngrok.com](https://ngrok.com) and copy your authtoken into `.env`:
+1. Create a free account at [ngrok.com](https://ngrok.com), reserve a static domain, and copy your authtoken into `.env`:
 
    ```env
    NGROK_AUTHTOKEN=your_token_here
    ```
 
-2. Start the stack with the phone profile:
+2. Start the stack with the phone profile (detached/background):
 
    ```bash
-   docker compose --profile phone up --build
+   docker compose --profile phone up -d --build
    ```
 
-3. Get the public HTTPS URL:
-   - Open http://localhost:4040 in your browser, or
-   - Run `curl http://localhost:4040/api/tunnels` and copy the `public_url` (`https://....ngrok-free.app`)
+3. The public HTTPS URL is fixed and does not change on restart:
+
+   `https://intense-elf-lively.ngrok-free.app`
+
+   Verify the tunnel is active:
+
+   ```bash
+   curl http://localhost:4040/api/tunnels
+   curl https://intense-elf-lively.ngrok-free.app/health
+   ```
+
+   View ngrok logs:
+
+   ```bash
+   docker compose logs -f ngrok
+   ```
 
 4. In the **OwnTracks** app:
    - Preferences → Connection → Mode: **HTTP**
-   - URL: `https://<your-ngrok-id>.ngrok-free.app/api/v1/ingest/owntracks`
+   - URL: `https://intense-elf-lively.ngrok-free.app/api/v1/ingest/owntracks`
    - If `INGEST_TOKEN` is set in `.env`, use **Bearer** auth or HTTP Basic (password = token).
 
 5. Set your tracker ID (`tid`) to **AT** (maps to seeded vehicle `phone-AT`) or register a new vehicle with `deviceId: phone-<tid>`.
 
 6. Send a manual location from OwnTracks — the map at http://localhost:8080/map should update live.
 
-> **Note:** Free ngrok URLs change when the ngrok container restarts — update OwnTracks with the new URL each time.
 > The ingest endpoint returns HTTP `200` with an empty JSON array `[]` (OwnTracks protocol requirement).
 
 ### Example OwnTracks payload

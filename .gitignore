@@ -1,0 +1,55 @@
+# Secrets — never commit real tokens (NGROK_AUTHTOKEN, INGEST_TOKEN, etc.)
+.env
+.env.local
+.env.*.local
+!.env.example
+!**/.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.output/
+.nitro/
+.vinxi/
+.tanstack/
+build/
+
+# Backend
+backend/node_modules/
+backend/dist/
+
+# Frontend
+frontend/gps-tracker-for-cars/node_modules/
+frontend/gps-tracker-for-cars/dist/
+frontend/gps-tracker-for-cars/.output/
+frontend/gps-tracker-for-cars/.nitro/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS & editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.sw?
+
+# Cloudflare / TanStack Start local
+.wrangler/
+.dev.vars
+
+# Docker local volumes (if bind-mounted)
+postgres_data/
+
+# Test / coverage
+coverage/
+*.tsbuildinfo
+
+# Cursor / plans (local IDE)
+.cursor/

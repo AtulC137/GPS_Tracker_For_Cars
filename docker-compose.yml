@@ -1,0 +1,82 @@
+services:
+  postgres:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_USER: fleet
+      POSTGRES_PASSWORD: fleet
+      POSTGRES_DB: fleet
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleet -d fleet"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config:ro
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql://fleet:fleet@postgres:5432/fleet
+      PORT: 3000
+      HOST: 0.0.0.0
+      INGEST_TOKEN: ${INGEST_TOKEN:-change-me}
+      OFFLINE_THRESHOLD_SEC: ${OFFLINE_THRESHOLD_SEC:-300}
+      CORS_ORIGINS: http://localhost:5173,http://localhost:8080
+      OWTRACKS_MQTT_ENABLED: ${OWNTRACKS_MQTT_ENABLED:-false}
+      MQTT_URL: mqtt://mosquitto:1883
+      OWTRACKS_MQTT_TOPIC: owntracks/#
+      CAR_SENSOR_ENABLED: ${CAR_SENSOR_ENABLED:-false}
+      RUN_SEED: ${RUN_SEED:-true}
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./frontend/gps-tracker-for-cars
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+        VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:3000/ws}
+    ports:
+      - "8080:3000"
+    depends_on:
+      - backend
+
+  ngrok:
+    image: ngrok/ngrok:latest
+    profiles: ["phone"]
+    restart: unless-stopped
+    command: http backend:3000
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

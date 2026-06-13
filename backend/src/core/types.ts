@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const LocationSourceSchema = z.enum(["owntracks", "generic", "car_sensor"]);
+export const LocationSourceSchema = z.enum(["owntracks", "generic", "car_sensor", "ais140"]);
 export type LocationSource = z.infer<typeof LocationSourceSchema>;
 
 export const NormalizedLocationUpdateSchema = z.object({

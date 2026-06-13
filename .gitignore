@@ -51,5 +51,10 @@ postgres_data/
 coverage/
 *.tsbuildinfo
 
-# Cursor / plans (local IDE)
+# Cursor IDE (local only — do not commit)
 .cursor/
+.cursorignore
+.cursorrules
+.cursor/rules/
+*.plan.md
+AGENTS.md

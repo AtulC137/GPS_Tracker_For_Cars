@@ -14,10 +14,21 @@ const envSchema = z.object({
     .transform((v) => v === "true"),
   MQTT_URL: z.string().default("mqtt://mosquitto:1883"),
   OWTRACKS_MQTT_TOPIC: z.string().default("owntracks/#"),
-  CAR_SENSOR_ENABLED: z
+  AIS140_TCP_ENABLED: z
     .string()
     .optional()
     .transform((v) => v === "true"),
+  AIS140_TCP_PORT: z.coerce.number().default(5000),
+  AIS140_TCP_HOST: z.string().default("0.0.0.0"),
+  AIS140_VALIDATE_CHECKSUM: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  AIS140_SEND_ACK: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  AIS140_DEMO_IMEI: z.string().default("888888888888999"),
 });
 
 export type Env = z.infer<typeof envSchema>;

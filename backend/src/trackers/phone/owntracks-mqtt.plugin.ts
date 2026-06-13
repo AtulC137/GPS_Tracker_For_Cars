@@ -11,15 +11,18 @@ export function createOwntracksMqttPlugin(env: Env): TrackerPlugin {
   return {
     id: "owntracks-mqtt",
 
-    async start(_app: FastifyInstance, ctx: TrackerPluginContext) {
+    async start(app: FastifyInstance, ctx: TrackerPluginContext) {
       if (!env.OWTRACKS_MQTT_ENABLED) return;
 
-      client = mqtt.connect(env.MQTT_URL);
+      client = mqtt.connect(env.MQTT_URL, {
+        reconnectPeriod: 5_000,
+      });
 
       client.on("connect", () => {
+        app.log.info(`MQTT connected to ${env.MQTT_URL}`);
         client?.subscribe(env.OWTRACKS_MQTT_TOPIC, (err) => {
-          if (err) console.error("MQTT subscribe error:", err);
-          else console.log(`MQTT subscribed to ${env.OWTRACKS_MQTT_TOPIC}`);
+          if (err) app.log.error({ err }, "MQTT subscribe error");
+          else app.log.info(`MQTT subscribed to ${env.OWTRACKS_MQTT_TOPIC}`);
         });
       });
 
@@ -30,15 +33,19 @@ export function createOwntracksMqttPlugin(env: Env): TrackerPlugin {
           await ctx.ingestion.ingest(normalized);
         } catch (err) {
           if (err instanceof UnknownDeviceError) {
-            console.warn(err.message);
+            app.log.warn(err.message);
             return;
           }
-          console.error("MQTT message handling error:", err);
+          app.log.error({ err }, "MQTT message handling error");
         }
       });
 
       client.on("error", (err) => {
-        console.error("MQTT client error:", err);
+        app.log.error({ err }, "MQTT client error (broker unreachable?)");
+      });
+
+      client.on("reconnect", () => {
+        app.log.warn("MQTT reconnecting…");
       });
     },
 

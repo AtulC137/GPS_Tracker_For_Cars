@@ -44,13 +44,16 @@ async function main() {
     },
   });
 
+  const demoImei = process.env.AIS140_DEMO_IMEI ?? "888888888888999";
+  const ais140DeviceId = `ais140-${demoImei}`;
+
   const car = await prisma.vehicle.upsert({
-    where: { deviceId: "car-demo-001" },
+    where: { deviceId: ais140DeviceId },
     update: {},
     create: {
-      vehicleName: "Demo Car",
-      vehicleNumber: "MH-12-AB-1234",
-      deviceId: "car-demo-001",
+      vehicleName: "AIS-140 Demo Car",
+      vehicleNumber: "MH01P80000",
+      deviceId: ais140DeviceId,
       liveState: {
         create: {
           latitude: 18.5314,

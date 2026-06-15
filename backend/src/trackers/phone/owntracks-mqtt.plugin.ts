@@ -5,6 +5,12 @@ import type { Env } from "../../config/env.js";
 import type { TrackerPlugin, TrackerPluginContext } from "../tracker-plugin.js";
 import { owntracksToNormalized } from "./owntracks.adapter.js";
 
+function tidFromPayload(payload: unknown): string | undefined {
+  if (typeof payload !== "object" || payload === null) return undefined;
+  const tid = (payload as { tid?: unknown }).tid;
+  return typeof tid === "string" ? tid : undefined;
+}
+
 export function createOwntracksMqttPlugin(env: Env): TrackerPlugin {
   let client: MqttClient | null = null;
 
@@ -26,17 +32,26 @@ export function createOwntracksMqttPlugin(env: Env): TrackerPlugin {
         });
       });
 
-      client.on("message", async (_topic, buf) => {
+      client.on("message", async (topic, buf) => {
+        let payload: unknown | undefined;
         try {
-          const payload = JSON.parse(buf.toString());
+          payload = JSON.parse(buf.toString());
           const normalized = owntracksToNormalized(payload);
           await ctx.ingestion.ingest(normalized);
         } catch (err) {
           if (err instanceof UnknownDeviceError) {
-            app.log.warn(err.message);
+            app.log.warn(
+              {
+                deviceId: err.deviceId,
+                tid: tidFromPayload(payload),
+                topic,
+                errorType: "unknown_device",
+              },
+              "OwnTracks MQTT ingest rejected unknown device",
+            );
             return;
           }
-          app.log.error({ err }, "MQTT message handling error");
+          app.log.error({ err, topic }, "MQTT message handling error");
         }
       });
 

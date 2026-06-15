@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { UnknownDeviceError } from "../../core/location-ingestion.service.js";
+import { UnknownDeviceError, OrgVehicleLimitError } from "../../core/location-ingestion.service.js";
 import type { LocationIngestionService } from "../../core/location-ingestion.service.js";
 import { GenericGpsPayloadSchema } from "../../core/types.js";
 import { createIngestAuth } from "../middleware/ingest-auth.js";
@@ -37,6 +37,9 @@ export function registerGpsRoutes(
       } catch (err) {
         if (err instanceof UnknownDeviceError) {
           return reply.code(404).send({ error: err.message });
+        }
+        if (err instanceof OrgVehicleLimitError) {
+          return reply.code(403).send({ error: err.message });
         }
         if (err instanceof ZodError) {
           return reply.code(400).send({ error: "Invalid GPS payload" });

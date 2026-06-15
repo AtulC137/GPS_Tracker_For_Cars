@@ -67,7 +67,7 @@ On Windows, use the preset shortcut:
 |------------|------------------------------|
 | Frontend   | http://localhost:8080        |
 | Backend API| http://localhost:3000        |
-| WebSocket  | ws://localhost:3000/ws       |
+| WebSocket  | ws://localhost:3000/ws?token=`JWT` |
 | AIS-140 TCP| localhost:5000 (or ngrok reserved TCP host:port) |
 | PostgreSQL | localhost:5432               |
 | Adminer (DB UI) | http://localhost:8081 (`--profile dev` only) |
@@ -86,7 +86,37 @@ Browse tables in the browser at **http://localhost:8081** (requires `--profile d
 | Password | `fleet` |
 | Database | `fleet` |
 
-Tables: `Vehicle`, `VehicleLiveState`, `LocationHistory`.
+Tables: `Organization`, `User`, `Vehicle`, `VehicleLiveState`, `LocationHistory`.
+
+## Accounts and login
+
+**New organization:** register at **http://localhost:8080/register** (organization name + admin email/password). One admin account per organization — add trackers from the Vehicles page after sign-in.
+
+**Demo fleet** (after seed):
+
+| Role   | Email                     | Password    |
+|--------|---------------------------|-------------|
+| Admin  | `admin@demo-fleet.local`  | `Admin123!` |
+| Viewer | `viewer@demo-fleet.local` | `Viewer123!` |
+
+Each organization can track up to **100 vehicles** (configurable via `maxVehicles`). Dashboard APIs require a JWT; GPS ingest still uses `INGEST_TOKEN` when set.
+
+## Add trackers (Vehicles page)
+
+Admins use **Add tracker** on `/vehicles` to register:
+
+| Type | Device ID pattern | Client configures |
+|------|-------------------|-------------------|
+| AIS-140 VLT | `ais140-<15-digit-IMEI>` | TCP host + port on VLT (MH SOP) |
+| OwnTracks phone | `phone-<tid>` | HTTP URL (ngrok) or MQTT broker (Tailscale/LAN) |
+
+Set these in `backend/.env` so setup instructions show the correct public endpoints:
+
+- `PUBLIC_AIS140_TCP_HOST` / `PUBLIC_AIS140_TCP_PORT` — VLT primary server
+- `PUBLIC_OWTRACKS_HTTP_URL` — e.g. `https://your-ngrok-domain/api/v1/ingest/owntracks`
+- `PUBLIC_OWTRACKS_MQTT_HOST` / `PUBLIC_OWTRACKS_MQTT_PORT` — Mosquitto (use Tailscale IP on mobile data)
+
+Optional: `DEFAULT_ORG_ID` for legacy OwnTracks auto-register to the demo org only.
 
 > Dev only — do not enable the `dev` profile on production servers.
 
@@ -337,7 +367,11 @@ curl -X POST http://localhost:3000/api/v1/gps/location \
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/health` | Health check |
+| POST | `/api/v1/auth/login` | Sign in (JWT) |
+| POST | `/api/v1/auth/register` | Create organization + admin user |
 | GET | `/api/v1/vehicles` | List vehicles |
+| POST | `/api/v1/vehicles` | Register tracker (admin only) |
+| GET | `/api/v1/tracker-setup` | Public connection settings for setup UI |
 | GET | `/api/v1/vehicles/:id` | Vehicle detail |
 | GET | `/api/v1/vehicles/:id/live` | Live state |
 | GET | `/api/v1/vehicles/:id/history?start=&end=` | Track history (ISO dates) |
@@ -360,7 +394,13 @@ Copy each example to `.env` in the same directory and edit as needed.
 ### Backend (`backend/.env`)
 
 - `DATABASE_URL` — PostgreSQL connection string (local dev; Docker overrides in compose)
+- `JWT_SECRET` / `JWT_EXPIRES_IN` — dashboard auth tokens
+- `DEFAULT_ORG_ID` — org for legacy OwnTracks auto-register (dev)
+- `PUBLIC_AIS140_TCP_HOST` / `PUBLIC_AIS140_TCP_PORT` — shown in AIS-140 setup instructions
+- `PUBLIC_OWTRACKS_HTTP_URL` — OwnTracks HTTP ingest URL shown to users
+- `PUBLIC_OWTRACKS_MQTT_HOST` / `PUBLIC_OWTRACKS_MQTT_PORT` — MQTT broker shown to users
 - `INGEST_TOKEN` — optional auth for ingest endpoints
+- `AUTO_REGISTER_OWTRACKS_PHONES` — auto-create `phone-<tid>` vehicles on first OwnTracks ingest (default `true`)
 - `NGROK_AUTHTOKEN` — required for ngrok containers (`--profile phone` or `--profile ais140`)
 - `NGROK_DOMAIN` — reserved HTTP domain for OwnTracks (`--profile phone`)
 - `NGROK_TCP_ADDRESS` — reserved TCP host:port for AIS-140 (`--profile ais140`)
@@ -455,3 +495,30 @@ netstat -ano | findstr "8080 3000 5432"
 ```
 
 Stop the conflicting process or change the port mapping in `docker-compose.yml`.
+
+### OwnTracks HTTP 404 (phone queue growing)
+
+OwnTracks logs `HTTP request failed. Status: 404` when the backend rejects the location. Common causes:
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| HTTP 404, queue growing | Unknown `phone-<tid>` | Set `tid` to `AT`, or keep `AUTO_REGISTER_OWTRACKS_PHONES=true` (default) |
+| HTTP 401 | Missing/wrong Bearer token | OwnTracks → HTTP headers: `Authorization: Bearer <INGEST_TOKEN>` |
+| Connection refused / timeout | ngrok or backend down | `.\compose.ps1 --profile phone up -d --build` |
+| Works on Wi‑Fi only | Laptop/ngrok offline on mobile data | Keep laptop + ngrok running for HTTP ingest |
+
+**OwnTracks HTTP checklist** (one-time phone config):
+
+- Mode: **HTTP**
+- URL: `https://<NGROK_DOMAIN>/api/v1/ingest/owntracks` (e.g. `https://intense-elf-lively.ngrok-free.app/api/v1/ingest/owntracks`)
+- HTTP header: `Authorization: Bearer <INGEST_TOKEN>` (if set in `backend/.env`)
+- Tracker ID (`tid`): any value works with auto-register; `AT` matches the seeded vehicle
+
+**Smoke-test after starting ngrok:**
+
+```powershell
+.\scripts\test-owntracks-ingest.ps1
+.\scripts\test-owntracks-ingest.ps1 -Tid ZZ
+```
+
+Expect `PASS: OwnTracks HTTP ingest accepted (200 + [])`.

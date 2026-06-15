@@ -7,14 +7,42 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id          String    @id @default(cuid())
+  name        String
+  slug        String    @unique
+  maxVehicles Int       @default(100)
+  createdAt   DateTime  @default(now())
+  users       User[]
+  vehicles    Vehicle[]
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  name           String?
+  role           String
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
 model Vehicle {
-  id            String            @id @default(cuid())
-  vehicleName   String
-  vehicleNumber String
-  deviceId      String            @unique
-  createdAt     DateTime          @default(now())
-  liveState     VehicleLiveState?
-  history       LocationHistory[]
+  id             String            @id @default(cuid())
+  vehicleName    String
+  vehicleNumber  String
+  deviceId       String            @unique
+  trackerType    String            @default("ais140")
+  organizationId String
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdAt      DateTime          @default(now())
+  liveState      VehicleLiveState?
+  history        LocationHistory[]
+
+  @@index([organizationId])
 }
 
 model VehicleLiveState {

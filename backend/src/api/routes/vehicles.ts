@@ -40,6 +40,15 @@ const CreateVehicleSchema = z.discriminatedUnion("trackerType", [
   CreateOwntracksSchema,
 ]);
 
+const UpdateVehicleSchema = z
+  .object({
+    vehicleName: z.string().min(1).max(100).optional(),
+    vehicleNumber: z.string().min(1).max(32).optional(),
+  })
+  .refine((v) => v.vehicleName !== undefined || v.vehicleNumber !== undefined, {
+    message: "No fields to update",
+  });
+
 function parseHistoryQuery(start?: string, end?: string) {
   if (!start || !end) {
     return { error: "start and end query params required (ISO 8601)" as const };
@@ -123,7 +132,10 @@ export function registerVehicleRoutes(
 
   app.get("/api/v1/vehicles", auth, async (request, reply) => {
     const user = getAuthUser(request);
-    const vehicles = await vehicleService.findAll(user.orgId);
+    const vehicles =
+      user.role === "admin"
+        ? await vehicleService.findAll(user.orgId)
+        : await vehicleService.findAllAssignedToUser(user.orgId, user.sub);
     return reply.send(vehicles);
   });
 
@@ -132,9 +144,43 @@ export function registerVehicleRoutes(
     auth,
     async (request, reply) => {
       const user = getAuthUser(request);
-      const vehicle = await vehicleService.findById(request.params.id, user.orgId);
+      const vehicle =
+        user.role === "admin"
+          ? await vehicleService.findById(request.params.id, user.orgId)
+          : await vehicleService.findByIdAssignedToUser(
+              request.params.id,
+              user.orgId,
+              user.sub,
+            );
       if (!vehicle) return reply.code(404).send({ error: "Vehicle not found" });
       return reply.send(vehicle);
+    },
+  );
+
+  app.patch<{ Params: { id: string } }>(
+    "/api/v1/vehicles/:id",
+    adminAuth,
+    async (request, reply) => {
+      const parsed = UpdateVehicleSchema.safeParse(request.body);
+      if (!parsed.success) {
+        const first = parsed.error.errors[0]?.message ?? "Invalid vehicle data";
+        return reply.code(400).send({ error: first });
+      }
+
+      const user = getAuthUser(request);
+      try {
+        const vehicle = await vehicleService.updateDetails(
+          request.params.id,
+          user.orgId,
+          parsed.data,
+        );
+        return reply.send(vehicle);
+      } catch (err) {
+        if (err instanceof VehicleNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
+        throw err;
+      }
     },
   );
 
@@ -143,7 +189,14 @@ export function registerVehicleRoutes(
     auth,
     async (request, reply) => {
       const user = getAuthUser(request);
-      const live = await vehicleService.getLive(request.params.id, user.orgId);
+      const live =
+        user.role === "admin"
+          ? await vehicleService.getLive(request.params.id, user.orgId)
+          : await vehicleService.getLiveAssignedToUser(
+              request.params.id,
+              user.orgId,
+              user.sub,
+            );
       if (!live) return reply.code(404).send({ error: "Live state not found" });
       return reply.send(live);
     },
@@ -161,17 +214,26 @@ export function registerVehicleRoutes(
     const user = getAuthUser(request);
 
     try {
-      const history = await vehicleService.getHistory(
-        request.params.id,
-        user.orgId,
-        parsed.startDate,
-        parsed.endDate,
-        {
-          downsample: request.query.downsample
-            ? Number.parseInt(request.query.downsample, 10)
-            : undefined,
-        },
-      );
+      const downsample = request.query.downsample
+        ? Number.parseInt(request.query.downsample, 10)
+        : undefined;
+      const history =
+        user.role === "admin"
+          ? await vehicleService.getHistory(
+              request.params.id,
+              user.orgId,
+              parsed.startDate,
+              parsed.endDate,
+              { downsample },
+            )
+          : await vehicleService.getHistoryAssignedToUser(
+              request.params.id,
+              user.orgId,
+              user.sub,
+              parsed.startDate,
+              parsed.endDate,
+              { downsample },
+            );
       return reply.send(history);
     } catch (err) {
       if (err instanceof VehicleNotFoundError) {
@@ -196,12 +258,21 @@ export function registerVehicleRoutes(
     const user = getAuthUser(request);
 
     try {
-      const summary = await vehicleService.getHistorySummary(
-        request.params.id,
-        user.orgId,
-        parsed.startDate,
-        parsed.endDate,
-      );
+      const summary =
+        user.role === "admin"
+          ? await vehicleService.getHistorySummary(
+              request.params.id,
+              user.orgId,
+              parsed.startDate,
+              parsed.endDate,
+            )
+          : await vehicleService.getHistorySummaryAssignedToUser(
+              request.params.id,
+              user.orgId,
+              user.sub,
+              parsed.startDate,
+              parsed.endDate,
+            );
       return reply.send(summary);
     } catch (err) {
       if (err instanceof VehicleNotFoundError) {

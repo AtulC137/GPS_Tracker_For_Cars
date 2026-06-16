@@ -120,6 +120,23 @@ async function assertVehicleInOrg(id: string, organizationId: string) {
 
 }
 
+async function assertVehicleAssignedToUser(
+  id: string,
+  organizationId: string,
+  userId: string,
+) {
+  const vehicle = await prisma.vehicle.findFirst({
+    where: {
+      id,
+      organizationId,
+      users: { some: { userId } },
+    },
+    include: { liveState: true },
+  });
+
+  return vehicle;
+}
+
 
 
 export class VehicleService {
@@ -140,6 +157,19 @@ export class VehicleService {
 
   }
 
+  async findAllAssignedToUser(organizationId: string, userId: string) {
+    const vehicles = await prisma.vehicle.findMany({
+      where: {
+        organizationId,
+        users: { some: { userId } },
+      },
+      include: { liveState: true },
+      orderBy: { vehicleName: "asc" },
+    });
+
+    return vehicles.map(formatVehicle);
+  }
+
 
 
   async findById(id: string, organizationId: string) {
@@ -148,6 +178,47 @@ export class VehicleService {
 
     return vehicle ? formatVehicle(vehicle) : null;
 
+  }
+
+  async findByIdAssignedToUser(
+    id: string,
+    organizationId: string,
+    userId: string,
+  ) {
+    const vehicle = await prisma.vehicle.findFirst({
+      where: {
+        id,
+        organizationId,
+        users: { some: { userId } },
+      },
+      include: { liveState: true },
+    });
+
+    return vehicle ? formatVehicle(vehicle) : null;
+  }
+
+  async updateDetails(
+    id: string,
+    organizationId: string,
+    input: { vehicleName?: string; vehicleNumber?: string },
+  ) {
+    const existing = await assertVehicleInOrg(id, organizationId);
+    if (!existing) throw new VehicleNotFoundError();
+
+    const vehicle = await prisma.vehicle.update({
+      where: { id },
+      data: {
+        vehicleName:
+          input.vehicleName !== undefined ? input.vehicleName.trim() : undefined,
+        vehicleNumber:
+          input.vehicleNumber !== undefined
+            ? input.vehicleNumber.trim()
+            : undefined,
+      },
+      include: { liveState: true },
+    });
+
+    return formatVehicle(vehicle);
   }
 
 
@@ -194,6 +265,24 @@ export class VehicleService {
 
   }
 
+  async getLiveAssignedToUser(id: string, organizationId: string, userId: string) {
+    const vehicle = await assertVehicleAssignedToUser(id, organizationId, userId);
+
+    if (!vehicle?.liveState) return null;
+
+    const live = vehicle.liveState;
+
+    return {
+      vehicleId: vehicle.id,
+      latitude: live.latitude,
+      longitude: live.longitude,
+      speed: live.speed,
+      heading: live.heading,
+      lastSeenAt: live.lastSeenAt.toISOString(),
+      status: live.status as VehicleStatus,
+    };
+  }
+
 
 
   private async fetchHistoryPoints(id: string, organizationId: string, start: Date, end: Date) {
@@ -218,6 +307,26 @@ export class VehicleService {
 
     });
 
+  }
+
+  private async fetchHistoryPointsAssignedToUser(
+    id: string,
+    organizationId: string,
+    userId: string,
+    start: Date,
+    end: Date,
+  ) {
+    const vehicle = await assertVehicleAssignedToUser(id, organizationId, userId);
+
+    if (!vehicle) return null;
+
+    return prisma.locationHistory.findMany({
+      where: {
+        vehicleId: id,
+        timestamp: { gte: start, lte: end },
+      },
+      orderBy: { timestamp: "asc" },
+    });
   }
 
 
@@ -318,6 +427,45 @@ export class VehicleService {
 
   }
 
+  async getHistoryAssignedToUser(
+    id: string,
+    organizationId: string,
+    userId: string,
+    start: Date,
+    end: Date,
+    options: { downsample?: number } = {},
+  ) {
+    const rangeError = validateHistoryRange(start, end);
+    if (rangeError) throw new HistoryRangeError(rangeError);
+
+    const vehicle = await assertVehicleAssignedToUser(id, organizationId, userId);
+    if (!vehicle) throw new VehicleNotFoundError();
+
+    const totalPointCount = await prisma.locationHistory.count({
+      where: { vehicleId: id, timestamp: { gte: start, lte: end } },
+    });
+
+    const truncated = totalPointCount > MAX_HISTORY_POINTS;
+    const rows = await prisma.locationHistory.findMany({
+      where: { vehicleId: id, timestamp: { gte: start, lte: end } },
+      orderBy: { timestamp: "asc" },
+      take: truncated ? MAX_HISTORY_POINTS : undefined,
+    });
+
+    let points = rows.map(mapHistoryPoint);
+    if (options.downsample && options.downsample > 1) {
+      points = downsamplePoints(points, options.downsample);
+    }
+
+    return {
+      vehicleId: id,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      points,
+      ...(truncated ? { truncated: true, totalPointCount } : {}),
+    };
+  }
+
 
 
   async getHistorySummary(id: string, organizationId: string, start: Date, end: Date) {
@@ -396,6 +544,49 @@ export class VehicleService {
 
     };
 
+  }
+
+  async getHistorySummaryAssignedToUser(
+    id: string,
+    organizationId: string,
+    userId: string,
+    start: Date,
+    end: Date,
+  ) {
+    const rangeError = validateHistoryRange(start, end);
+    if (rangeError) throw new HistoryRangeError(rangeError);
+
+    const totalPointCount = await prisma.locationHistory.count({
+      where: { vehicleId: id, timestamp: { gte: start, lte: end } },
+    });
+
+    if (totalPointCount > MAX_SUMMARY_POINTS) {
+      throw new HistoryRangeError(
+        `Too many points (${totalPointCount}). Narrow the date range.`,
+      );
+    }
+
+    const rows = await this.fetchHistoryPointsAssignedToUser(
+      id,
+      organizationId,
+      userId,
+      start,
+      end,
+    );
+
+    if (!rows) {
+      throw new VehicleNotFoundError();
+    }
+
+    const points = rows.map(mapHistoryPoint);
+    const stats = computeRouteStats(points);
+
+    return {
+      vehicleId: id,
+      start: start.toISOString(),
+      end: end.toISOString(),
+      ...stats,
+    };
   }
 
   async create(

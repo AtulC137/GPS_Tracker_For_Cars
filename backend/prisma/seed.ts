@@ -12,11 +12,12 @@ async function hashPassword(password: string) {
 async function main() {
   const org = await prisma.organization.upsert({
     where: { slug: "demo-fleet" },
-    update: { name: "Demo Fleet", maxVehicles: 100 },
+    update: { name: "Demo Fleet", maxVehicles: 100, inviteCode: "DEMO-FLEET" },
     create: {
       id: DEMO_ORG_ID,
       name: "Demo Fleet",
       slug: "demo-fleet",
+      inviteCode: "DEMO-FLEET",
       maxVehicles: 100,
     },
   });
@@ -30,6 +31,7 @@ async function main() {
       passwordHash: adminHash,
       name: "Fleet Admin",
       role: "admin",
+      status: "active",
       organizationId: org.id,
     },
     create: {
@@ -37,6 +39,7 @@ async function main() {
       passwordHash: adminHash,
       name: "Fleet Admin",
       role: "admin",
+      status: "active",
       organizationId: org.id,
     },
   });
@@ -47,6 +50,7 @@ async function main() {
       passwordHash: viewerHash,
       name: "Fleet Viewer",
       role: "viewer",
+      status: "active",
       organizationId: org.id,
     },
     create: {
@@ -54,6 +58,7 @@ async function main() {
       passwordHash: viewerHash,
       name: "Fleet Viewer",
       role: "viewer",
+      status: "active",
       organizationId: org.id,
     },
   });

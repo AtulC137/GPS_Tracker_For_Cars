@@ -13,6 +13,7 @@ import { prisma } from "./db/client.js";
 import { registerAuthRoutes } from "./api/routes/auth.js";
 import { registerVehicleRoutes } from "./api/routes/vehicles.js";
 import { registerGpsRoutes } from "./api/routes/gps.js";
+import { registerUserRoutes } from "./api/routes/users.js";
 import { TrackerRegistry } from "./trackers/registry.js";
 import type { JwtUserPayload } from "./core/auth.service.js";
 
@@ -37,6 +38,7 @@ const trackerRegistry = new TrackerRegistry(env);
 
 await app.register(cors, {
   origin: getCorsOrigins(env),
+  methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
 });
 
 await app.register(jwt, {
@@ -79,11 +81,25 @@ app.get("/ws", { websocket: true }, (socket, request) => {
     return;
   }
 
-  wsHub.add(socket, payload.orgId);
+  // Admin receives all org vehicles; non-admin receives only assigned vehicles.
+  void (async () => {
+    if (payload.role === "admin") {
+      wsHub.add(socket, payload.orgId, null);
+      return;
+    }
+    const rows = await prisma.userVehicle.findMany({
+      where: { userId: payload.sub },
+      select: { vehicleId: true },
+    });
+    wsHub.add(socket, payload.orgId, new Set(rows.map((r) => r.vehicleId)));
+  })().catch(() => {
+    socket.close(1011, "Server error");
+  });
 });
 
 registerAuthRoutes(app, authService);
 registerVehicleRoutes(app, vehicleService, { env, wsHub });
+registerUserRoutes(app);
 registerGpsRoutes(app, ingestion, env.INGEST_TOKEN);
 await trackerRegistry.startAll(app, ingestion, env.INGEST_TOKEN);
 

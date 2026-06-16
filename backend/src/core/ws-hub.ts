@@ -22,14 +22,15 @@ export type WsBroadcast = LocationBroadcast | StatusBroadcast;
 interface TrackedClient {
   socket: WebSocket;
   orgId: string;
+  allowedVehicleIds: Set<string> | null;
 }
 
 export class WsHub {
   private clients = new Map<WebSocket, TrackedClient>();
   private vehicleOrgCache = new Map<string, string>();
 
-  add(client: WebSocket, orgId: string) {
-    this.clients.set(client, { socket: client, orgId });
+  add(client: WebSocket, orgId: string, allowedVehicleIds: Set<string> | null) {
+    this.clients.set(client, { socket: client, orgId, allowedVehicleIds });
     client.on("close", () => this.clients.delete(client));
     client.on("error", () => this.clients.delete(client));
   }
@@ -50,8 +51,9 @@ export class WsHub {
     if (!orgId) return;
 
     const payload = JSON.stringify(event);
-    for (const { socket, orgId: clientOrgId } of this.clients.values()) {
+    for (const { socket, orgId: clientOrgId, allowedVehicleIds } of this.clients.values()) {
       if (clientOrgId !== orgId) continue;
+      if (allowedVehicleIds && !allowedVehicleIds.has(event.vehicleId)) continue;
       if (socket.readyState === 1) {
         socket.send(payload);
       }

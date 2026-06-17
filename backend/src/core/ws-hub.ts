@@ -39,6 +39,10 @@ export class WsHub {
     this.vehicleOrgCache.set(vehicleId, orgId);
   }
 
+  removeVehicleOrg(vehicleId: string) {
+    this.vehicleOrgCache.delete(vehicleId);
+  }
+
   async warmVehicleOrgCache(loadAll: () => Promise<Array<{ id: string; organizationId: string }>>) {
     const vehicles = await loadAll();
     for (const vehicle of vehicles) {

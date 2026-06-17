@@ -130,6 +130,17 @@ Seeded vehicles (device IDs must match ingest payloads):
 
 ## Local Development (without Docker)
 
+Use **npm only** for local dev — do not run `docker compose` backend/frontend at the same time (they also bind ports **3000** and **5000** and will conflict).
+
+| Service | URL |
+|---------|-----|
+| Backend API | http://localhost:3000 |
+| WebSocket | ws://localhost:3000/ws?token=`JWT` |
+| Frontend dev (Vite) | http://localhost:5173 |
+| AIS-140 TCP | localhost:5000 |
+
+Restart the frontend dev server after changing `frontend/gps-tracker-for-cars/.env` (Vite reads env at startup).
+
 ### Backend
 
 ```bash
@@ -151,6 +162,8 @@ cp .env.example .env
 npm install
 npm run dev
 ```
+
+Open **http://localhost:5173** (not 3000 — that port is the backend).
 
 ## OwnTracks HTTP Setup (ngrok in Docker)
 

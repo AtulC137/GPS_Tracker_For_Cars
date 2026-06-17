@@ -646,6 +646,13 @@ export class VehicleService {
     return formatVehicle(vehicle);
   }
 
+  async delete(id: string, organizationId: string) {
+    const existing = await assertVehicleInOrg(id, organizationId);
+    if (!existing) throw new VehicleNotFoundError();
+
+    await prisma.vehicle.delete({ where: { id } });
+  }
+
 }
 
 

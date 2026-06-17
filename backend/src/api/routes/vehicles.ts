@@ -157,6 +157,24 @@ export function registerVehicleRoutes(
     },
   );
 
+  app.delete<{ Params: { id: string } }>(
+    "/api/v1/vehicles/:id",
+    adminAuth,
+    async (request, reply) => {
+      const user = getAuthUser(request);
+      try {
+        await vehicleService.delete(request.params.id, user.orgId);
+        deps.wsHub.removeVehicleOrg(request.params.id);
+        return reply.code(204).send();
+      } catch (err) {
+        if (err instanceof VehicleNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
+        throw err;
+      }
+    },
+  );
+
   app.patch<{ Params: { id: string } }>(
     "/api/v1/vehicles/:id",
     adminAuth,

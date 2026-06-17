@@ -8,6 +8,7 @@ import type { TrackerPlugin, TrackerPluginContext } from "./tracker-plugin.js";
 
 export class TrackerRegistry {
   private plugins: TrackerPlugin[] = [];
+  private initialized = false;
 
   constructor(env: Env) {
     this.plugins.push(owntracksHttpPlugin);
@@ -17,17 +18,27 @@ export class TrackerRegistry {
     }
   }
 
+  get isInitialized(): boolean {
+    return this.initialized;
+  }
+
+  get pluginIds(): string[] {
+    return this.plugins.map((p) => p.id);
+  }
+
   async startAll(app: FastifyInstance, ingestion: LocationIngestionService, ingestToken?: string) {
     const ctx: TrackerPluginContext = { ingestion, ingestToken };
     for (const plugin of this.plugins) {
       await plugin.start(app, ctx);
       app.log.info(`Tracker plugin started: ${plugin.id}`);
     }
+    this.initialized = true;
   }
 
   async stopAll() {
     for (const plugin of this.plugins) {
       await plugin.stop();
     }
+    this.initialized = false;
   }
 }

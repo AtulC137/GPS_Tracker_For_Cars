@@ -9,6 +9,7 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY tsconfig.json ./
+COPY config ./config
 COPY src ./src
 RUN npm run build
 
@@ -25,6 +26,7 @@ COPY prisma ./prisma
 RUN npx prisma generate
 
 COPY --from=builder /app/dist ./dist
+COPY config ./config
 COPY docker-entrypoint.sh ./
 RUN sed -i 's/\r$//' docker-entrypoint.sh && chmod +x docker-entrypoint.sh
 

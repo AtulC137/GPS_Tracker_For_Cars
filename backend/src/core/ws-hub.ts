@@ -63,4 +63,11 @@ export class WsHub {
   get clientCount() {
     return this.clients.size;
   }
+
+  closeAll(code = 1001, reason = "Server shutting down"): void {
+    for (const { socket } of this.clients.values()) {
+      socket.close(code, reason);
+    }
+    this.clients.clear();
+  }
 }

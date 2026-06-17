@@ -1,0 +1,45 @@
+{
+  "server": {
+    "port": 3000,
+    "host": "0.0.0.0",
+    "corsOrigins": ["http://localhost:5173", "http://localhost:8080"]
+  },
+  "tracking": {
+    "autoRegisterOwntracksPhones": true,
+    "defaultOrgId": null,
+    "offlineThresholdSec": 300,
+    "statusCheckIntervalSec": 60,
+    "phoneDevicePrefix": "phone-",
+    "ais140": {
+      "tcpEnabled": true,
+      "tcpPort": 5000,
+      "tcpHost": "0.0.0.0",
+      "validateChecksum": false,
+      "sendAck": false,
+      "demoImei": "888888888888999"
+    },
+    "owntracks": {
+      "mqttEnabled": false,
+      "mqttUrl": "mqtt://mosquitto:1883",
+      "mqttTopic": "owntracks/#",
+      "publicHttpPath": "/api/v1/ingest/owntracks"
+    },
+    "public": {
+      "ais140TcpHost": "localhost",
+      "ais140TcpPort": 5000,
+      "owntracksHttpUrl": "http://localhost:3000/api/v1/ingest/owntracks",
+      "owntracksMqttHost": "localhost",
+      "owntracksMqttPort": 1883
+    }
+  },
+  "status": {
+    "offlineThresholdSec": 300,
+    "checkIntervalSec": 60
+  },
+  "websocket": {
+    "path": "/ws"
+  },
+  "features": {
+    "jwtExpiresIn": "7d"
+  }
+}

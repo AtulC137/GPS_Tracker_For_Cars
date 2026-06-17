@@ -1,10 +1,32 @@
 import "dotenv/config";
-import { createApp } from "./app.js";
+import Fastify from "fastify";
+import { registerHealthRoutes } from "./bootstrap/health.js";
+import { startBackgroundJobs } from "./bootstrap/jobs.js";
+import { registerPlugins } from "./bootstrap/plugins.js";
+import { registerRoutes } from "./bootstrap/routes.js";
 import { createShutdownHandler } from "./bootstrap/shutdown.js";
+import { registerWebSocketRoute } from "./bootstrap/websocket.js";
 import { getStartupMetadata, loadAppConfig } from "./config/app-config.js";
+import { createServices } from "./container/services.js";
+import { createTrackerContainer } from "./container/tracker-container.js";
+import type { AppContainer } from "./container/types.js";
 
 const config = loadAppConfig();
-const { app, container } = await createApp(config);
+
+const app = Fastify({ logger: true });
+const services = createServices(config, app.log);
+const trackerContainer = createTrackerContainer(config);
+const container: AppContainer = {
+  ...services,
+  trackerContainer,
+};
+
+await registerPlugins(app, config);
+registerHealthRoutes(app, container);
+registerWebSocketRoute(app, container);
+registerRoutes(app, container);
+await startBackgroundJobs(app, container);
+
 const shutdown = createShutdownHandler({ app, container, log: app.log });
 
 process.on("SIGINT", () => void shutdown("SIGINT").then(() => process.exit(0)));

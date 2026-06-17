@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { createRequire } from "node:module";
 import { z } from "zod";
 
@@ -50,6 +48,7 @@ const fileConfigSchema = z.object({
   }),
   features: z.object({
     jwtExpiresIn: z.string().default("7d"),
+    ingestOpenForTesting: z.boolean().default(false),
   }),
 });
 
@@ -69,6 +68,7 @@ export type Env = {
   PORT: number;
   HOST: string;
   INGEST_TOKEN?: string;
+  INGEST_OPEN_FOR_TESTING: boolean;
   AUTO_REGISTER_OWTRACKS_PHONES: boolean;
   OFFLINE_THRESHOLD_SEC: number;
   STATUS_CHECK_INTERVAL_SEC: number;
@@ -92,22 +92,14 @@ export type Env = {
   PUBLIC_OWTRACKS_MQTT_PORT?: number;
 };
 
-function loadFileConfig(): z.infer<typeof fileConfigSchema> {
-  const configPath = path.join(process.cwd(), "config", "config.json");
-  let raw: unknown;
-  try {
-    raw = JSON.parse(readFileSync(configPath, "utf8"));
-  } catch {
-    console.error(`Failed to load config file at ${configPath}`);
-    process.exit(1);
-  }
-
-  const parsed = fileConfigSchema.safeParse(raw);
-  if (!parsed.success) {
-    console.error("Invalid config.json:", parsed.error.flatten().fieldErrors);
-    process.exit(1);
-  }
-  return parsed.data;
+function getDefaultFileConfig(): z.infer<typeof fileConfigSchema> {
+  return fileConfigSchema.parse({
+    server: {},
+    tracking: { ais140: {}, owntracks: {}, public: {} },
+    status: {},
+    websocket: {},
+    features: {},
+  });
 }
 
 function parseOptionalBoolEnv(value: string | undefined): boolean {
@@ -202,6 +194,10 @@ function mergeWithEnv(fileConfig: z.infer<typeof fileConfigSchema>): AppConfig {
     websocket: fileConfig.websocket,
     features: {
       jwtExpiresIn: env.JWT_EXPIRES_IN ?? fileConfig.features.jwtExpiresIn,
+      ingestOpenForTesting:
+        env.INGEST_OPEN_FOR_TESTING !== undefined
+          ? parseOptionalBoolEnv(env.INGEST_OPEN_FOR_TESTING)
+          : fileConfig.features.ingestOpenForTesting,
     },
     secrets: {
       databaseUrl: env.DATABASE_URL ?? "",
@@ -224,6 +220,7 @@ export function toFlatEnv(config: AppConfig): Env {
     PORT: config.server.port,
     HOST: config.server.host,
     INGEST_TOKEN: config.secrets.ingestToken,
+    INGEST_OPEN_FOR_TESTING: config.features.ingestOpenForTesting,
     AUTO_REGISTER_OWTRACKS_PHONES: config.tracking.autoRegisterOwntracksPhones,
     OFFLINE_THRESHOLD_SEC: config.status.offlineThresholdSec,
     STATUS_CHECK_INTERVAL_SEC: config.status.checkIntervalSec,
@@ -249,8 +246,7 @@ export function toFlatEnv(config: AppConfig): Env {
 }
 
 export function loadAppConfig(): AppConfig {
-  const fileConfig = loadFileConfig();
-  return mergeWithEnv(fileConfig);
+  return mergeWithEnv(getDefaultFileConfig());
 }
 
 export function loadEnv(): Env {

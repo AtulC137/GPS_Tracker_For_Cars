@@ -12,5 +12,8 @@ export function registerRoutes(app: FastifyInstance, container: AppContainer): v
     wsHub: container.wsHub,
   });
   registerUserRoutes(app);
-  registerGpsRoutes(app, container.ingestion, container.env.INGEST_TOKEN);
+  registerGpsRoutes(app, container.ingestion, {
+    ingestToken: container.env.INGEST_TOKEN,
+    openTestRoute: container.env.INGEST_OPEN_FOR_TESTING,
+  });
 }
